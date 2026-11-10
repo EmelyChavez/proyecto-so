@@ -8,7 +8,7 @@
 #include <signal.h>    // kill(), SIGTERM
 #include <readline/readline.h>
 #include <readline/history.h>
-
+#include <glob.h>
 // ============================================================
 // CONSTANTES
 // ============================================================
@@ -404,15 +404,39 @@ void ejecutar_pipeline(
 
             while (token != NULL)
             {
+                // Verificamos si el argumento contiene comodines
+                if (strchr(token, '*') != NULL || strchr(token, '?') != NULL || strchr(token, '[') != NULL) {
+                    glob_t glob_result;
+                    // Intentamos expandir el comodín
+                    if (glob(token, 0, NULL, &glob_result) == 0) {
+                        // Si encuentra coincidencias, las agregamos una a una a nuestro arreglo de argumentos
+                        for (size_t g = 0; g < glob_result.gl_pathc; g++) {
+                            if (arg_idx >= MAX_ARGS - 1) {
+                                fprintf(stderr, "Demasiados argumentos.\n");
+                                globfree(&glob_result);
+                                _exit(1);
+                            }
+                            args[arg_idx++] = strdup(glob_result.gl_pathv[g]); // Duplicamos la cadena para evitar problemas de memoria
+                        }
+                        globfree(&glob_result);
+                    } else {
+                        // Si el comodín no coincide con ningún archivo, lo pasamos tal cual (comportamiento estándar de bash)
+                        if (arg_idx >= MAX_ARGS - 1) {
+                            fprintf(stderr, "Demasiados argumentos.\n");
+                            _exit(1);
+                        }
+                        args[arg_idx++] = token;
+                    }
+                } else {
+                    // Si no tiene comodines, reservamos una posición para el NULL final.
+                    if (arg_idx >= MAX_ARGS - 1)
+                    {
+                        fprintf(stderr, "Demasiados argumentos.\n");
+                        _exit(1);
+                    }
 
-                // Reservamos una posición para el NULL final.
-                if (arg_idx >= MAX_ARGS - 1)
-                {
-                    fprintf(stderr, "Demasiados argumentos.\n");
-                    _exit(1);
-                }
-
-                args[arg_idx++] = token;
+                    args[arg_idx++] = token;
+                }                
 
                 token = strtok(NULL, " \t\n");
             }
